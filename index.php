@@ -360,14 +360,14 @@ select:focus { outline: none; border-color: var(--blue); }
 .redirect-item.deleting      { outline: 1px solid var(--red); }
 .redirect-item.deleting-fade { opacity: 0; transition: opacity .3s ease; }
 .redirect-info { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
-.redirect-label { font-size: .8rem; color: var(--text-mute); }
+.redirect-label { font-size: .74rem; color: var(--text-mute); }
 .redirect-rule {
   display: flex; align-items: center; gap: .6rem; flex-wrap: wrap;
-  font-size: .88rem;
+  font-size: .8rem;
 }
 .redirect-rule code {
   background: var(--dark-4); border-radius: 4px;
-  padding: 1px 7px; font-size: .82rem; color: var(--text-dim);
+  padding: 1px 7px; font-size: .76rem; color: var(--text-dim);
   word-break: break-all;
 }
 .redirect-arrow { color: var(--text-mute); flex-shrink: 0; }
@@ -449,7 +449,7 @@ select:focus { outline: none; border-color: var(--blue); }
 
 /* ── Drawer ── */
 me-drawer {
-  position: fixed; top: 0; right: 0; bottom: 0; width: 560px; max-width: 90vw;
+  position: fixed; top: 0; right: 0; bottom: 0; width: 680px; max-width: 92vw;
   background: var(--dark-2);
   box-shadow: -4px 0 32px rgba(0,0,0,.5);
   z-index: 500; display: flex; flex-direction: column;
@@ -753,7 +753,10 @@ drawer-foot {
           <input type="text" id="dp-rw-cond-pattern" placeholder="^old\.example\.com$">
         </div>
       </div>
-      <button class="btn btn-blue btn-sm" onclick="dpCreateRewrite()" style="margin:1rem 0 1.25rem">Add Rewrite</button>
+      <div style="display:flex;align-items:center;gap:.75rem;margin:1rem 0 1.25rem">
+        <button class="btn btn-blue btn-sm" id="dp-rw-submit-btn" onclick="dpCreateRewrite()">Add Rewrite</button>
+        <button class="btn btn-ghost btn-sm" id="dp-rw-cancel-edit" onclick="dpCancelRewriteEdit()" style="display:none">Cancel</button>
+      </div>
       <div id="dp-rewrite-list" class="vhost-list"></div>
     </div>
 
@@ -978,14 +981,18 @@ function getConditionTest() {
   return sel.value;
 }
 
+let _rwRules     = [];
+let _rwEditLines = null; // lines array of the rule currently being edited, or null
+
 async function dpLoadRewrites() {
   if (!_activeSite) return;
   const list = document.getElementById('dp-rewrite-list');
   list.innerHTML = '<div class="empty">Loading…</div>';
   const r = await fetch('/api/rewrites?vhost=' + encodeURIComponent(_activeSite.name));
   const d = await r.json();
+  _rwRules = d.rules;
   if (!d.rules.length) { list.innerHTML = '<div class="empty">No rewrite rules</div>'; return; }
-  list.innerHTML = d.rules.map(rule => {
+  list.innerHTML = d.rules.map((rule, i) => {
     const condHtml = rule.conditions.map(c =>
       `<div class="redirect-label">Cond: <code>${c.test}</code> <code>${c.pattern}</code></div>`
     ).join('');
@@ -995,7 +1002,10 @@ async function dpLoadRewrites() {
         ${condHtml}
         <div class="redirect-rule">${flagsTag}<code>${rule.pattern}</code><span class="redirect-arrow">→</span><code>${rule.substitution}</code></div>
       </div>
-      <delete-in-place caption="&#128465;" confirm="ok?" data-lines="${rule.lines.join(',')}"></delete-in-place>
+      <div style="display:flex;align-items:center;gap:.5rem">
+        <button type="button" class="btn btn-ghost btn-sm" onclick="dpEditRewrite(${i})">Edit</button>
+        <delete-in-place caption="&#128465;" confirm="ok?" data-lines="${rule.lines.join(',')}"></delete-in-place>
+      </div>
     </div>`;
   }).join('');
 }
@@ -1003,6 +1013,62 @@ async function dpLoadRewrites() {
 document.getElementById('dp-rewrite-list').addEventListener('dip-confirm', function (e) {
   dpDeleteRewrite(e.detail['data-lines'], e.target.closest('.redirect-item'));
 });
+
+function dpEditRewrite(i) {
+  const rule = _rwRules[i];
+  if (!rule) return;
+
+  document.getElementById('dp-rw-pattern').value = rule.pattern;
+  document.getElementById('dp-rw-sub').value      = rule.substitution;
+
+  resetFlagsDropdown();
+  (rule.flags ? rule.flags.split(',') : []).forEach(f => {
+    if (!f) return;
+    if (f[0] === 'R') {
+      _rwFlagRCheck.checked = true;
+      _rwFlagRCode.disabled = false;
+      const eq = f.indexOf('=');
+      _rwFlagRCode.value = eq >= 0 ? f.slice(eq + 1) : '';
+    } else {
+      const cb = _rwFlagsDd.querySelector(`.ms-option input[value="${f}"]`);
+      if (cb) cb.checked = true;
+    }
+  });
+  updateFlagsLabel();
+
+  const condSel    = document.getElementById('dp-rw-cond-test');
+  const condCustom = document.getElementById('dp-rw-cond-test-custom');
+  const cond       = rule.conditions[0];
+  if (cond) {
+    const known = Array.from(condSel.options).some(o => o.value === cond.test);
+    if (known) { condSel.value = cond.test; condCustom.style.display = 'none'; condCustom.value = ''; }
+    else       { condSel.value = '__custom__'; condCustom.style.display = ''; condCustom.value = cond.test; }
+    document.getElementById('dp-rw-cond-pattern').value = cond.pattern;
+  } else {
+    condSel.value = '';
+    condCustom.style.display = 'none';
+    condCustom.value = '';
+    document.getElementById('dp-rw-cond-pattern').value = '';
+  }
+
+  _rwEditLines = rule.lines;
+  document.getElementById('dp-rw-submit-btn').textContent = 'Save Changes';
+  document.getElementById('dp-rw-cancel-edit').style.display = '';
+  document.getElementById('dp-rw-pattern').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function dpCancelRewriteEdit() {
+  _rwEditLines = null;
+  document.getElementById('dp-rw-pattern').value = '';
+  document.getElementById('dp-rw-sub').value = '';
+  resetFlagsDropdown();
+  document.getElementById('dp-rw-cond-test').value = '';
+  document.getElementById('dp-rw-cond-test-custom').style.display = 'none';
+  document.getElementById('dp-rw-cond-test-custom').value = '';
+  document.getElementById('dp-rw-cond-pattern').value = '';
+  document.getElementById('dp-rw-submit-btn').textContent = 'Add Rewrite';
+  document.getElementById('dp-rw-cancel-edit').style.display = 'none';
+}
 
 async function dpCreateRewrite() {
   if (!_activeSite) return;
@@ -1013,20 +1079,28 @@ async function dpCreateRewrite() {
   const condPattern   = document.getElementById('dp-rw-cond-pattern').value.trim();
   if (!pattern || !substitution) { SimpleNotification.error({ text: 'Pattern and substitution are required.' }); return; }
   const conditions = (condTest && condPattern) ? [{ test: condTest, pattern: condPattern }] : [];
+
+  // Editing an existing rule: remove its old lines first, then add the new version.
+  // Only the pre-edit backup token is kept for undo, so one Undo click restores the original rule exactly.
+  let preEditToken = null;
+  if (_rwEditLines) {
+    const delRes  = await fetch('/api/rewrites', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ action: 'delete', vhost: _activeSite.name, lines: _rwEditLines })
+    });
+    const delData = await delRes.json();
+    if (!delData.ok) { SimpleNotification.error({ text: delData.error || 'Failed to update rule' }); return; }
+    preEditToken = delData.token;
+  }
+
   const r = await fetch('/api/rewrites', {
     method: 'POST', headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ action: 'create', vhost: _activeSite.name, pattern, substitution, flags, conditions })
   });
   const d = await r.json();
   if (d.ok) {
-    _undoTokens = [d.token]; _undoSection = 'rewrites'; setUndoActive(true);
-    document.getElementById('dp-rw-pattern').value = '';
-    document.getElementById('dp-rw-sub').value = '';
-    resetFlagsDropdown();
-    document.getElementById('dp-rw-cond-test').value = '';
-    document.getElementById('dp-rw-cond-test-custom').style.display = 'none';
-    document.getElementById('dp-rw-cond-test-custom').value = '';
-    document.getElementById('dp-rw-cond-pattern').value = '';
+    _undoTokens = [preEditToken || d.token]; _undoSection = 'rewrites'; setUndoActive(true);
+    dpCancelRewriteEdit();
     dpLoadRewrites();
   } else { SimpleNotification.error({ text: d.error || 'Unknown error' }); }
 }
@@ -1041,6 +1115,7 @@ async function dpDeleteRewrite(lineCsv, item) {
   const d = await r.json();
   if (!d.ok) { notifyErr(d.error || 'Unknown error'); return; }
   _undoTokens = d.token ? [d.token] : []; _undoSection = 'rewrites'; setUndoActive(_undoTokens.length > 0);
+  if (_rwEditLines && lineCsv === _rwEditLines.join(',')) dpCancelRewriteEdit();
   dipRemoveRow(item);
 }
 
