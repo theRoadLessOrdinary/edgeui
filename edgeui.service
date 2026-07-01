@@ -1,0 +1,14 @@
+[Unit]
+Description=EdgeUI Apache Manager
+After=network.target apache2.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/media/william/8TB-DRIVE/www/sites/edgeUI
+ExecStart=/usr/bin/php -S 127.0.0.1:8765 router.php
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
