@@ -1554,13 +1554,18 @@ async function loadModules() {
 function renderModules() {
   const list   = document.getElementById('module-list');
   const filter = (document.getElementById('mod-filter').value || '').toLowerCase().trim();
-  const filtered = filter ? _modules.filter(m => m.name.toLowerCase().includes(filter)) : _modules;
+  const filtered = filter
+    ? _modules.filter(m => m.name.toLowerCase().includes(filter) || (m.description || '').toLowerCase().includes(filter))
+    : _modules;
 
   if (!filtered.length) { list.innerHTML = '<div class="empty">No modules match.</div>'; return; }
 
   list.innerHTML = filtered.map(m => `
     <div class="redirect-item" data-name="${m.name}">
-      <div class="redirect-info"><div class="redirect-rule"><code>${m.name}</code></div></div>
+      <div class="redirect-info">
+        <div class="redirect-rule"><code>${m.name}</code></div>
+        <div class="redirect-label">${m.description || ''}</div>
+      </div>
       <label class="toggle" title="${m.enabled ? 'Disable' : 'Enable'} ${m.name}">
         <input type="checkbox" ${m.enabled ? 'checked' : ''} onchange="toggleModule('${m.name}', this.checked, this)">
         <div class="toggle-track"></div>
