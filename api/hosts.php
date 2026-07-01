@@ -19,10 +19,16 @@ function split_hosts($content, $marker) {
 if ($method === 'GET') {
     $content = file_exists($path) ? file_get_contents($path) : '';
     $parts   = split_hosts($content, $marker);
+    // The "after" section (e.g. a large ad-block list) is left untouched on save and can be huge —
+    // never ship its full contents to the browser, just enough to describe it.
+    $afterLines = $parts['after'] !== null && $parts['after'] !== ''
+        ? substr_count(rtrim($parts['after'], "\n"), "\n") + 1
+        : 0;
     echo json_encode([
-        'local'      => $parts['local'],
-        'has_marker' => $parts['after'] !== null,
-        'after'      => $parts['after'] ?? '',
+        'local'       => $parts['local'],
+        'has_marker'  => $parts['after'] !== null,
+        'after_lines' => $afterLines,
+        'after_bytes' => $parts['after'] !== null ? strlen($parts['after']) : 0,
     ]);
     exit;
 }

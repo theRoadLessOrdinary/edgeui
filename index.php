@@ -669,10 +669,7 @@ drawer-foot {
         </div>
         <label>Local entries</label>
         <textarea id="hosts-local" class="code-textarea" spellcheck="false" style="min-height:220px"></textarea>
-        <div id="hosts-after-wrap" style="display:none;margin-top:1rem">
-          <label>Below <code>### end local ###</code> (read-only)<span class="help-tip" tabindex="0" data-tip="Preserved exactly as-is when you save — this tool never edits or removes anything past the marker.">?</span></label>
-          <textarea id="hosts-after" class="code-textarea" style="min-height:120px;color:var(--text-mute)" readonly></textarea>
-        </div>
+        <div id="hosts-after-wrap" class="redirect-label" style="display:none;margin-top:.75rem"></div>
         <button class="btn btn-blue btn-sm" onclick="saveHostsFile()" style="margin-top:1.25rem">Save Hosts File</button>
       </div>
     </div>
@@ -1528,16 +1525,15 @@ loadVhosts();
 async function loadHostsFile() {
   const localEl   = document.getElementById('hosts-local');
   const afterWrap = document.getElementById('hosts-after-wrap');
-  const afterEl   = document.getElementById('hosts-after');
   const r = await fetch('/api/hosts');
   const d = await r.json();
   localEl.value = d.local || '';
   if (d.has_marker) {
     afterWrap.style.display = '';
-    afterEl.value = d.after || '';
+    const kb = (d.after_bytes / 1024).toFixed(0);
+    afterWrap.textContent = `${d.after_lines.toLocaleString()} lines (${kb} KB) below the marker — left untouched, not shown here.`;
   } else {
     afterWrap.style.display = 'none';
-    afterEl.value = '';
   }
 }
 
