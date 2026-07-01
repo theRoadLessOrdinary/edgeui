@@ -46,8 +46,9 @@ Then open `http://127.0.0.1:8765` in a browser.
   display and error logging.
 - **.htaccess** — view and edit a site's own `.htaccess` file (in its document root) directly.
 - **Hosts File** — edit the local entries in `/etc/hosts`. Only the section above a
-  `### end local ###` marker is touched; anything below that marker (e.g. entries managed by other
-  tools) is preserved exactly as-is.
+  `### end local ###` marker is touched; anything below that marker (e.g. a large ad-block list
+  managed by another tool) is never even sent to the browser — just its line/byte count.
+- **Modules** — list and toggle Apache modules (`a2enmod`/`a2dismod`), filterable by name.
 
 Every destructive action (delete a redirect, remove a vhost, etc.) uses an inline
 click-to-confirm control rather than a browser `confirm()` dialog, and every change is backed up
@@ -76,6 +77,7 @@ api/rewrites.php        RewriteCond / RewriteRule blocks
 api/errors.php          ErrorDocument, PHP error display, error logging
 api/htaccess.php        read/write a site's .htaccess (path resolved from its DocumentRoot)
 api/hosts.php           read/write /etc/hosts, preserving everything below "### end local ###"
+api/modules.php         list/toggle Apache modules (a2enmod/a2dismod)
 api/status.php          Apache running/config-check status for the top nav indicator
 vendor/                 small vanilla-JS dependencies (no build step)
 edgeui.service          systemd unit
