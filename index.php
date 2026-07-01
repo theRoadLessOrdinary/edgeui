@@ -368,6 +368,7 @@ select:focus { outline: none; border-color: var(--blue); }
 /* ── Redirect rows ── */
 .redirect-item {
   display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem;
+  flex-wrap: wrap;
   background: var(--dark-3);
   border: 1px solid rgba(255,255,255,.10);
   border-radius: 8px;
@@ -441,6 +442,7 @@ select:focus { outline: none; border-color: var(--blue); }
 
 /* ── Inline error ── */
 .inline-error {
+  width: 100%;
   font-size: .78rem; color: var(--red);
   padding-top: .5rem;
   max-height: 0; overflow: hidden;
@@ -649,7 +651,23 @@ drawer-foot {
     <div class="page" id="page-modules">
       <div class="page-header">
         <h1>Modules</h1>
-        <p>Coming soon</p>
+        <p>Enable or disable Apache modules</p>
+      </div>
+
+      <div class="card">
+        <div class="help-intro">
+          Modules add optional features to Apache — rewriting, compression, SSL, and so on. Most sites
+          only need a handful of these enabled. Disabling one that another module or site config
+          depends on will fail safely: Apache rejects the change and an error shows on that row instead
+          of anything breaking.
+        </div>
+        <div class="form-group" style="margin-bottom:1.25rem">
+          <label>Filter</label>
+          <input type="text" id="mod-filter" placeholder="Search modules…" oninput="renderModules()">
+        </div>
+        <div id="module-list" class="vhost-list">
+          <div class="empty">Loading…</div>
+        </div>
       </div>
     </div>
 
@@ -1295,6 +1313,7 @@ document.querySelectorAll('.sidebar-nav button[data-page]').forEach(btn => {
     btn.classList.add('active');
     document.getElementById('page-' + btn.dataset.page).classList.add('active');
     if (btn.dataset.page === 'hosts') loadHostsFile();
+    if (btn.dataset.page === 'modules') loadModules();
   });
 });
 
@@ -1520,6 +1539,55 @@ async function undoDelete() {
 }
 
 loadVhosts();
+
+// ── Modules ──────────────────────────────────────────────────────────────────
+let _modules = [];
+
+async function loadModules() {
+  const list = document.getElementById('module-list');
+  list.innerHTML = '<div class="empty">Loading…</div>';
+  const r = await fetch('/api/modules');
+  _modules = await r.json();
+  renderModules();
+}
+
+function renderModules() {
+  const list   = document.getElementById('module-list');
+  const filter = (document.getElementById('mod-filter').value || '').toLowerCase().trim();
+  const filtered = filter ? _modules.filter(m => m.name.toLowerCase().includes(filter)) : _modules;
+
+  if (!filtered.length) { list.innerHTML = '<div class="empty">No modules match.</div>'; return; }
+
+  list.innerHTML = filtered.map(m => `
+    <div class="redirect-item" data-name="${m.name}">
+      <div class="redirect-info"><div class="redirect-rule"><code>${m.name}</code></div></div>
+      <label class="toggle" title="${m.enabled ? 'Disable' : 'Enable'} ${m.name}">
+        <input type="checkbox" ${m.enabled ? 'checked' : ''} onchange="toggleModule('${m.name}', this.checked, this)">
+        <div class="toggle-track"></div>
+        <div class="toggle-thumb"></div>
+      </label>
+    </div>
+  `).join('');
+}
+
+async function toggleModule(name, enable, checkbox) {
+  checkbox.disabled = true;
+  const r = await fetch('/api/modules', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ action: 'toggle', name, enable })
+  });
+  const d = await r.json();
+  checkbox.disabled = false;
+
+  const mod = _modules.find(m => m.name === name);
+  if (d.ok) {
+    if (mod) mod.enabled = enable;
+    checkbox.closest('.redirect-item').querySelector('label.toggle').title = (enable ? 'Disable' : 'Enable') + ' ' + name;
+  } else {
+    checkbox.checked = !enable;
+    showInlineError(checkbox.closest('.redirect-item'), d.output || 'Apache rejected the change');
+  }
+}
 
 // ── Hosts File ───────────────────────────────────────────────────────────────
 async function loadHostsFile() {
