@@ -165,7 +165,8 @@ main {
   margin-bottom: .6rem;
 }
 .vhost-info { display: flex; flex-direction: column; gap: 3px; }
-.vhost-name { font-size: .95rem; font-weight: 600; }
+.vhost-name { font-size: .95rem; font-weight: 600; cursor: pointer; }
+.vhost-name:hover { color: var(--blue); }
 .vhost-meta {
   font-size: .78rem; color: var(--text-mute);
   display: flex; gap: 1rem;
@@ -248,6 +249,23 @@ input:focus {
   border-color: var(--blue);
 }
 input::placeholder { color: var(--text-mute); }
+.code-textarea {
+  background: var(--dark-3);
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: .82rem;
+  line-height: 1.5;
+  padding: .75rem .9rem;
+  width: 100%;
+  min-height: 320px;
+  resize: vertical;
+  tab-size: 4;
+  transition: border-color .15s;
+}
+.code-textarea:focus { outline: none; border-color: var(--blue); }
+.code-textarea::placeholder { color: var(--text-mute); }
 select {
   background: var(--dark-3);
   border: 1px solid rgba(255,255,255,.16);
@@ -566,6 +584,15 @@ drawer-foot {
         </button>
       </div>
     </div>
+    <div class="sidebar-section" style="margin-top:1.5rem">
+      <div class="sidebar-label">System</div>
+      <div class="sidebar-nav">
+        <button data-page="hosts">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z"/></svg>
+          Hosts File
+        </button>
+      </div>
+    </div>
   </aside>
 
   <main>
@@ -626,6 +653,30 @@ drawer-foot {
       </div>
     </div>
 
+    <!-- Hosts File -->
+    <div class="page" id="page-hosts">
+      <div class="page-header">
+        <h1>Hosts File</h1>
+        <p>Edit the local entries in <code>/etc/hosts</code></p>
+      </div>
+
+      <div class="card">
+        <div class="help-intro">
+          <code>/etc/hosts</code> maps hostnames to IP addresses before DNS is even checked — it's how
+          <code>edgecart.local</code>-style names resolve on this machine. Only the section above the
+          <code>### end local ###</code> marker is editable here; anything below it is left untouched
+          (e.g. entries managed by other tools), so it won't get overwritten when you save.
+        </div>
+        <label>Local entries</label>
+        <textarea id="hosts-local" class="code-textarea" spellcheck="false" style="min-height:220px"></textarea>
+        <div id="hosts-after-wrap" style="display:none;margin-top:1rem">
+          <label>Below <code>### end local ###</code> (read-only)<span class="help-tip" tabindex="0" data-tip="Preserved exactly as-is when you save — this tool never edits or removes anything past the marker.">?</span></label>
+          <textarea id="hosts-after" class="code-textarea" style="min-height:120px;color:var(--text-mute)" readonly></textarea>
+        </div>
+        <button class="btn btn-blue btn-sm" onclick="saveHostsFile()" style="margin-top:1.25rem">Save Hosts File</button>
+      </div>
+    </div>
+
   </main>
 </div>
 
@@ -641,6 +692,7 @@ drawer-foot {
       <button class="drawer-tab active" data-tab="redirects">Redirects</button>
       <button class="drawer-tab" data-tab="rewrites">Rewrites</button>
       <button class="drawer-tab" data-tab="errors">Error Handling</button>
+      <button class="drawer-tab" data-tab="htaccess">.htaccess</button>
     </div>
 
     <!-- Redirects tab -->
@@ -812,6 +864,17 @@ drawer-foot {
         <div id="dp-err-doc-list" class="vhost-list"></div>
       </div>
     </div>
+
+    <!-- .htaccess tab -->
+    <div class="drawer-panel" id="dp-htaccess">
+      <div class="help-intro">
+        The site's own <code>.htaccess</code> file, in its document root. Apache reads this on every
+        request — no reload needed after saving, but a typo here can break the whole site immediately.
+      </div>
+      <div id="dp-ht-path" class="redirect-label" style="margin-bottom:.5rem"></div>
+      <textarea id="dp-ht-content" class="code-textarea" spellcheck="false" placeholder="# No .htaccess file yet — anything you save here will create one"></textarea>
+      <button class="btn btn-blue btn-sm" onclick="dpSaveHtaccess()" style="margin-top:1rem">Save .htaccess</button>
+    </div>
   </drawer-content>
 </me-drawer>
 
@@ -867,6 +930,7 @@ function switchDrawerTab(tab) {
   if (tab === 'redirects') dpLoadRedirects();
   if (tab === 'rewrites')  dpLoadRewrites();
   if (tab === 'errors')    dpLoadErrors();
+  if (tab === 'htaccess')  dpLoadHtaccess();
 }
 
 // ── Drawer: Redirects ─────────────────────────────────────────────────────────
@@ -1199,6 +1263,33 @@ async function dpRemoveErrorDoc(code, item) {
   } else { notifyErr(d.error || 'Failed to remove'); }
 }
 
+// ── Drawer: .htaccess ────────────────────────────────────────────────────────
+async function dpLoadHtaccess() {
+  if (!_activeSite) return;
+  const pathEl = document.getElementById('dp-ht-path');
+  const textEl = document.getElementById('dp-ht-content');
+  pathEl.textContent = 'Loading…';
+  const r = await fetch('/api/htaccess?vhost=' + encodeURIComponent(_activeSite.name));
+  const d = await r.json();
+  textEl.value = d.content || '';
+  pathEl.textContent = d.path ? d.path + (d.exists ? '' : ' (does not exist yet)') : 'Could not resolve document root';
+}
+
+async function dpSaveHtaccess() {
+  if (!_activeSite) return;
+  const content = document.getElementById('dp-ht-content').value;
+  const r = await fetch('/api/htaccess', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ action: 'save', vhost: _activeSite.name, content })
+  });
+  const d = await r.json();
+  if (d.ok) {
+    if (d.token) { _undoTokens = [d.token]; _undoSection = 'htaccess'; setUndoActive(true); }
+    notifyOk('.htaccess saved.');
+    dpLoadHtaccess();
+  } else { notifyErr(d.error || 'Failed to save'); }
+}
+
 // ── Nav ──────────────────────────────────────────────────────────────────────
 document.querySelectorAll('.sidebar-nav button[data-page]').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -1206,6 +1297,7 @@ document.querySelectorAll('.sidebar-nav button[data-page]').forEach(btn => {
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById('page-' + btn.dataset.page).classList.add('active');
+    if (btn.dataset.page === 'hosts') loadHostsFile();
   });
 });
 
@@ -1268,7 +1360,7 @@ async function loadVhosts() {
       <div class="vhost-item" data-sld="${g.sld || g.configs[0].name}">
         <div class="vhost-top">
           <div class="vhost-info">
-            <div class="vhost-name">${g.sld || g.configs[0].name}</div>
+            <div class="vhost-name" onclick="openSiteProps('${sldKey}')">${g.sld || g.configs[0].name}</div>
             <div class="vhost-meta"><span>${g.doc_root || '—'}</span></div>
           </div>
           <div class="vhost-actions">
@@ -1412,7 +1504,7 @@ async function undoDelete() {
   if (!_undoTokens.length) return;
   setUndoActive(false);
 
-  const apis = { redirects: '/api/redirects', rewrites: '/api/rewrites', errors: '/api/errors' };
+  const apis = { redirects: '/api/redirects', rewrites: '/api/rewrites', errors: '/api/errors', htaccess: '/api/htaccess', hosts: '/api/hosts' };
   const api  = apis[_undoSection] || '/api/vhosts';
   await Promise.all(_undoTokens.map(token =>
     fetch(api, {
@@ -1425,10 +1517,43 @@ async function undoDelete() {
   if (_undoSection === 'redirects') dpLoadRedirects();
   else if (_undoSection === 'rewrites') dpLoadRewrites();
   else if (_undoSection === 'errors') dpLoadErrors();
+  else if (_undoSection === 'htaccess') dpLoadHtaccess();
+  else if (_undoSection === 'hosts') loadHostsFile();
   else loadVhosts();
 }
 
 loadVhosts();
+
+// ── Hosts File ───────────────────────────────────────────────────────────────
+async function loadHostsFile() {
+  const localEl   = document.getElementById('hosts-local');
+  const afterWrap = document.getElementById('hosts-after-wrap');
+  const afterEl   = document.getElementById('hosts-after');
+  const r = await fetch('/api/hosts');
+  const d = await r.json();
+  localEl.value = d.local || '';
+  if (d.has_marker) {
+    afterWrap.style.display = '';
+    afterEl.value = d.after || '';
+  } else {
+    afterWrap.style.display = 'none';
+    afterEl.value = '';
+  }
+}
+
+async function saveHostsFile() {
+  const local = document.getElementById('hosts-local').value;
+  const r = await fetch('/api/hosts', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ action: 'save', local })
+  });
+  const d = await r.json();
+  if (d.ok) {
+    _undoTokens = [d.token]; _undoSection = 'hosts'; setUndoActive(true);
+    notifyOk('Hosts file saved.');
+    loadHostsFile();
+  } else { notifyErr(d.error || 'Failed to save'); }
+}
 
 // ── Help tip collision avoidance ────────────────────────────────────────────────
 function positionHelpTip(el) {
