@@ -44,6 +44,10 @@ Then open `http://127.0.0.1:8765` in a browser.
   (`%{HTTP_HOST}`, `%{REQUEST_URI}`, ...).
 - **Error Handling** — custom `ErrorDocument` pages per status code, plus toggles for PHP error
   display and error logging.
+- **.htaccess** — view and edit a site's own `.htaccess` file (in its document root) directly.
+- **Hosts File** — edit the local entries in `/etc/hosts`. Only the section above a
+  `### end local ###` marker is touched; anything below that marker (e.g. entries managed by other
+  tools) is preserved exactly as-is.
 
 Every destructive action (delete a redirect, remove a vhost, etc.) uses an inline
 click-to-confirm control rather than a browser `confirm()` dialog, and every change is backed up
@@ -70,6 +74,8 @@ api/vhosts.php          list/create/delete/toggle/restore virtual hosts
 api/redirects.php       Redirect / RedirectMatch directives
 api/rewrites.php        RewriteCond / RewriteRule blocks
 api/errors.php          ErrorDocument, PHP error display, error logging
+api/htaccess.php        read/write a site's .htaccess (path resolved from its DocumentRoot)
+api/hosts.php           read/write /etc/hosts, preserving everything below "### end local ###"
 api/status.php          Apache running/config-check status for the top nav indicator
 vendor/                 small vanilla-JS dependencies (no build step)
 edgeui.service          systemd unit
