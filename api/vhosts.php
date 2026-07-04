@@ -3,6 +3,23 @@ header('Content-Type: application/json');
 
 $method = $_SERVER['REQUEST_METHOD'];
 
+// rename() fails across filesystem boundaries (EXDEV) — real in this setup:
+// site docroots live on a separate mounted drive from /etc/apache2/sites-backup.
+// Try the cheap same-filesystem rename first, fall back to copy+remove.
+function move_directory(string $src, string $dest): bool {
+    if (@rename($src, $dest)) {
+        return true;
+    }
+    $srcEsc  = escapeshellarg($src);
+    $destEsc = escapeshellarg($dest);
+    exec("cp -a {$srcEsc} {$destEsc} 2>&1", $cpOut, $cpRc);
+    if ($cpRc !== 0) {
+        return false;
+    }
+    exec("rm -rf {$srcEsc} 2>&1", $rmOut, $rmRc);
+    return $rmRc === 0;
+}
+
 function get_vhosts() {
     $available = glob('/etc/apache2/sites-available/*.conf') ?: [];
     $enabled_raw = glob('/etc/apache2/sites-enabled/*.conf') ?: [];
@@ -133,7 +150,17 @@ CONF;
             }
         }
 
-        echo json_encode(['ok' => true, 'path' => $path]);
+        // Enable immediately — creating a vhost should mean it's live, not
+        // leave it sitting inert in sites-available until someone notices
+        // and flips the toggle by hand.
+        exec("a2ensite {$name} 2>&1", $enOut, $enRc);
+        exec('apachectl graceful 2>&1', $enOut2, $enRc2);
+
+        echo json_encode([
+            'ok'      => true,
+            'path'    => $path,
+            'enabled' => $enRc === 0 && $enRc2 === 0,
+        ]);
         exit;
     }
 
@@ -158,6 +185,61 @@ CONF;
         exit;
     }
 
+    if ($action === 'delete_docroot') {
+        // Opt-in, separate from config deletion — moves (never rm -rf's) a
+        // vhost's document root into quarantine alongside the same token
+        // used for its conf backup, so one Undo click restores both.
+        $doc_root = rtrim($body['doc_root'] ?? '', '/');
+        $token    = preg_replace('/[^a-zA-Z0-9._-]/', '', $body['token'] ?? '');
+
+        if (!$doc_root || !$token) {
+            http_response_code(400);
+            echo json_encode(['error' => 'doc_root and token are required']);
+            exit;
+        }
+
+        $real = realpath($doc_root);
+        if (!$real || !is_dir($real)) {
+            echo json_encode(['ok' => true, 'skipped' => 'not_found']);
+            exit;
+        }
+
+        // Refuse anything that isn't a real, specific site folder — a typo
+        // or a docroot pointed at a shared parent should never be deletable.
+        $denylist = ['/', '/var', '/var/www', '/home', '/etc', '/usr', '/root',
+                     '/bin', '/sbin', '/lib', '/lib64', '/opt', '/srv', '/tmp',
+                     '/media', '/mnt', '/proc', '/sys', '/boot', '/dev'];
+        if (in_array($real, $denylist, true) || strlen($real) < 5) {
+            http_response_code(403);
+            echo json_encode(['error' => 'Refusing to delete a shared/system directory']);
+            exit;
+        }
+
+        // Refuse if any OTHER surviving vhost still points at this same docroot
+        foreach ((glob('/etc/apache2/sites-available/*.conf') ?: []) as $confPath) {
+            $c = file_get_contents($confPath);
+            if (preg_match('/DocumentRoot\s+(\S+)/i', $c, $m) && rtrim($m[1], '/') === $real) {
+                http_response_code(409);
+                echo json_encode(['error' => 'Another virtual host still uses this document root']);
+                exit;
+            }
+        }
+
+        $quarantineDir = '/etc/apache2/sites-backup/docroots';
+        if (!is_dir($quarantineDir)) mkdir($quarantineDir, 0700, true);
+
+        $dest = "$quarantineDir/$token";
+        if (!move_directory($real, $dest)) {
+            http_response_code(500);
+            echo json_encode(['error' => 'Failed to move document root']);
+            exit;
+        }
+        file_put_contents("$quarantineDir/{$token}.path", $real);
+
+        echo json_encode(['ok' => true, 'moved_to' => $dest]);
+        exit;
+    }
+
     if ($action === 'restore') {
         $token   = preg_replace('/[^a-zA-Z0-9._-]/', '', $body['token'] ?? '');
         $backdir = '/etc/apache2/sites-backup';
@@ -177,6 +259,18 @@ CONF;
         unlink($backup);
         exec("a2ensite $name 2>&1");
         exec('apachectl graceful 2>&1');
+
+        // Bring a quarantined docroot back too, if this token has one
+        $docQuarantineDir = '/etc/apache2/sites-backup/docroots';
+        $docBackup        = "$docQuarantineDir/$token";
+        $pathFile         = "$docQuarantineDir/{$token}.path";
+        if (is_dir($docBackup) && file_exists($pathFile)) {
+            $originalPath = trim(file_get_contents($pathFile));
+            if ($originalPath && !file_exists($originalPath) && move_directory($docBackup, $originalPath)) {
+                unlink($pathFile);
+            }
+        }
+
         echo json_encode(['ok' => true, 'name' => $name]);
         exit;
     }

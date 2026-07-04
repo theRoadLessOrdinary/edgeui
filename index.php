@@ -983,31 +983,36 @@ drawer-foot {
       <button class="btn btn-blue btn-sm" onclick="dpSaveHtaccess()" style="margin-top:1rem">Save .htaccess</button>
     </div>
 
-    <!-- Subdomains tab -->
+    <!-- Add Config tab -->
     <div class="drawer-panel" id="dp-subdomains">
       <div class="help-intro">
-        Add a <strong>subdomain</strong> to this site — a separate Apache virtual host sharing the same
-        base domain, e.g. <code>api</code> becomes <code>api.example.com</code>. Each subdomain gets its
-        own config file and can point at a different document root.
+        Add another Apache virtual host config to this site — a subdomain, an SSL companion on
+        port 443 for the same domain, or any other server name/port combination. Uses either the
+        prefix shortcut below or a fully custom server name; each config gets its own file and can
+        point at a different document root.
       </div>
       <div class="form-grid">
         <div class="form-group">
-          <label>Subdomain<span class="help-tip" tabindex="0" data-tip="Just the prefix — e.g. enter 'api' to create api.example.com.">?</span></label>
-          <input type="text" id="dp-sub-prefix" placeholder="api">
+          <label>Subdomain prefix<span class="help-tip" tabindex="0" data-tip="Shortcut — enter 'api' to build api.example.com below. Leave blank if you're typing a full server name instead.">?</span></label>
+          <input type="text" id="dp-sub-prefix" placeholder="api" oninput="dpSubPrefixChanged()">
         </div>
         <div class="form-group">
-          <label>Port<span class="help-tip" tabindex="0" data-tip="The network port Apache listens on for this subdomain. 80 is standard HTTP, 443 is HTTPS.">?</span></label>
+          <label>Server name<span class="help-tip" tabindex="0" data-tip="The full server name for this config — auto-filled from the prefix above, but fully editable. Reuse the exact same domain as another config (with a different port) for an SSL companion vhost, or type anything else entirely.">?</span></label>
+          <input type="text" id="dp-sub-servername" placeholder="api.example.com">
+        </div>
+        <div class="form-group">
+          <label>Port<span class="help-tip" tabindex="0" data-tip="The network port Apache listens on for this config. 80 is standard HTTP, 443 is HTTPS.">?</span></label>
           <input type="number" id="dp-sub-port" value="80">
         </div>
         <div class="form-group">
-          <label>Document root<span class="help-tip" tabindex="0" data-tip="The folder on disk holding this subdomain's files. Defaults to the main site's document root.">?</span></label>
+          <label>Document root<span class="help-tip" tabindex="0" data-tip="The folder on disk holding this config's files. Defaults to the main site's document root.">?</span></label>
           <div class="docroot-row">
             <input type="text" id="dp-sub-docroot" placeholder="/var/www/mysite">
             <button type="button" class="btn btn-ghost btn-sm" onclick="openFolderPicker('dp-sub-docroot')">Browse&hellip;</button>
           </div>
         </div>
       </div>
-      <button class="btn btn-blue btn-sm" onclick="dpCreateSubdomain()" style="margin-bottom:1.25rem">Add Subdomain</button>
+      <button class="btn btn-blue btn-sm" onclick="dpCreateSubdomain()" style="margin-bottom:1.25rem">Add Config</button>
       <div id="dp-subdomain-list" class="vhost-list"></div>
     </div>
   </drawer-content>
@@ -1574,7 +1579,7 @@ async function loadVhosts() {
     `).join('');
 
     return `
-      <div class="vhost-item" data-sld="${g.sld || g.configs[0].name}">
+      <div class="vhost-item" data-sld="${g.sld || g.configs[0].name}" data-docroot="${g.doc_root || ''}">
         <div class="vhost-top">
           <div class="vhost-info">
             <div class="vhost-name" onclick="openSiteProps('${sldKey}')">${g.sld || g.configs[0].name}</div>
@@ -1582,8 +1587,13 @@ async function loadVhosts() {
           </div>
           <div class="vhost-actions">
             <span class="badge ${statusClass}">${statusLabel}</span>
+            ${g.doc_root ? `
+            <label class="checkbox-label" style="font-size:.75rem" title="Also move the document root folder to quarantine when deleting - restorable via Undo, same as the config.">
+              <input type="checkbox" class="delete-docroot-check">
+              Delete folder too
+            </label>` : ''}
             <button class="btn btn-ghost btn-sm" onclick="openSiteProps('${sldKey}')">Manage</button>
-            ${g.configs.length > 1 ? `<delete-in-place caption="Delete All" confirm="ok?" data-names="${allNames}"></delete-in-place>` : ''}
+            <delete-in-place caption="${g.configs.length > 1 ? 'Delete All' : 'Delete Site'}" confirm="ok?" data-names="${allNames}"></delete-in-place>
           </div>
         </div>
         <div class="vhost-configs">${pills}</div>
@@ -1594,7 +1604,10 @@ async function loadVhosts() {
 
 document.getElementById('vhost-list').addEventListener('dip-confirm', function (e) {
   if (e.detail['data-names']) {
-    deleteVhostGroup(e.detail['data-names'], e.target.closest('.vhost-item'));
+    const item          = e.target.closest('.vhost-item');
+    const docRoot        = item.dataset.docroot || '';
+    const deleteDocroot  = item.querySelector('.delete-docroot-check')?.checked || false;
+    deleteVhostGroup(e.detail['data-names'], item, docRoot, deleteDocroot);
   } else if (e.detail['data-name']) {
     deleteVhostConfig(e.detail['data-name'], e.target.closest('.config-pill'));
   }
@@ -1643,11 +1656,19 @@ function showInlineError(item, message) {
 }
 
 // ── Drawer: Subdomains ─────────────────────────────────────────────────────────
+function dpSubPrefixChanged() {
+  const prefix = document.getElementById('dp-sub-prefix').value.trim().toLowerCase();
+  const base   = _activeSite?.baseDomain || '';
+  document.getElementById('dp-sub-servername').value = prefix && base ? `${prefix}.${base}` : (prefix || base);
+}
+
 async function dpLoadSubdomains() {
   if (!_activeSite) return;
   const list = document.getElementById('dp-subdomain-list');
   list.innerHTML = '<div class="empty">Loading…</div>';
 
+  document.getElementById('dp-sub-prefix').value = '';
+  document.getElementById('dp-sub-servername').value = _activeSite.baseDomain || '';
   document.getElementById('dp-sub-docroot').value = _activeSite.doc_root || '';
 
   const r = await fetch('/api/vhosts');
@@ -1686,20 +1707,17 @@ async function dpDeleteSubdomain(name, pill) {
 
 async function dpCreateSubdomain() {
   if (!_activeSite) return;
-  const prefix  = document.getElementById('dp-sub-prefix').value.trim().toLowerCase();
-  const port    = document.getElementById('dp-sub-port').value.trim() || '80';
-  const docRoot = document.getElementById('dp-sub-docroot').value.trim() || _activeSite.doc_root;
+  const serverName = document.getElementById('dp-sub-servername').value.trim().toLowerCase();
+  const port        = document.getElementById('dp-sub-port').value.trim() || '80';
+  const docRoot     = document.getElementById('dp-sub-docroot').value.trim() || _activeSite.doc_root;
 
-  if (!prefix) { SimpleNotification.error({ text: 'Subdomain is required.' }); return; }
-  if (!/^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/.test(prefix)) {
-    SimpleNotification.error({ text: 'Subdomain may only contain letters, numbers, and hyphens.' });
-    return;
-  }
-  if (!_activeSite.baseDomain) { SimpleNotification.error({ text: "This site has no domain to attach a subdomain to." }); return; }
+  if (!serverName) { SimpleNotification.error({ text: 'Server name is required.' }); return; }
   if (!docRoot) { SimpleNotification.error({ text: 'Document root is required.' }); return; }
 
-  const serverName = `${prefix}.${_activeSite.baseDomain}`;
-  const name        = serverName.replace(/[^a-zA-Z0-9._-]/g, '');
+  // Config filenames must be unique even when the server name (and port) match
+  // an existing config exactly — e.g. an SSL companion vhost reusing the same
+  // domain — so the name always includes the port.
+  const name = `${serverName}-${port}`.replace(/[^a-zA-Z0-9._-]/g, '');
 
   const r = await fetch('/api/vhosts', {
     method: 'POST',
@@ -1709,7 +1727,7 @@ async function dpCreateSubdomain() {
   const d = await r.json();
 
   if (d.ok) {
-    SimpleNotification.success({ text: `${serverName} created.` });
+    SimpleNotification.success({ text: `${serverName}:${port} created.` });
     document.getElementById('dp-sub-prefix').value = '';
     dpLoadSubdomains();
     loadVhosts();
@@ -1763,9 +1781,43 @@ async function createVhost() {
 let _undoTokens  = [];
 let _undoSection = 'vhosts';
 
+// Persist undo state across page reloads — it was previously pure in-memory
+// state, so a refresh right after a delete silently stranded the backup
+// files with no way to reach them from the UI. Expires after an hour so a
+// forgotten, long-stale "Undo" button doesn't linger indefinitely.
+const UNDO_STORAGE_KEY    = 'edgeui_undo_state';
+const UNDO_EXPIRY_MS      = 60 * 60 * 1000;
+
 function setUndoActive(active) {
   document.getElementById('btn-undo').classList.toggle('active', active);
+  if (active) {
+    localStorage.setItem(UNDO_STORAGE_KEY, JSON.stringify({
+      tokens: _undoTokens, section: _undoSection, savedAt: Date.now()
+    }));
+  } else {
+    localStorage.removeItem(UNDO_STORAGE_KEY);
+  }
 }
+
+function restoreUndoState() {
+  const raw = localStorage.getItem(UNDO_STORAGE_KEY);
+  if (!raw) return;
+  try {
+    const state = JSON.parse(raw);
+    if (state.tokens?.length && Date.now() - (state.savedAt || 0) < UNDO_EXPIRY_MS) {
+      _undoTokens  = state.tokens;
+      _undoSection = state.section || 'vhosts';
+      document.getElementById('btn-undo').classList.add('active');
+    } else {
+      localStorage.removeItem(UNDO_STORAGE_KEY);
+      document.getElementById('btn-undo').classList.remove('active');
+    }
+  } catch (e) {
+    localStorage.removeItem(UNDO_STORAGE_KEY);
+    document.getElementById('btn-undo').classList.remove('active');
+  }
+}
+restoreUndoState();
 
 async function deleteVhost(name) {
   const r = await fetch('/api/vhosts', {
@@ -1795,10 +1847,24 @@ async function deleteVhostConfig(name, pill) {
   });
 }
 
-async function deleteVhostGroup(names, item) {
+async function deleteVhostGroup(names, item, docRoot, deleteDocroot) {
   const list = names.split(',');
   const tokens = await Promise.all(list.map(n => deleteVhost(n)));
-  _undoTokens  = tokens.filter(Boolean);
+  const validTokens = tokens.filter(Boolean);
+
+  if (deleteDocroot && docRoot && validTokens.length) {
+    const r = await fetch('/api/vhosts', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ action: 'delete_docroot', doc_root: docRoot, token: validTokens[0] })
+    });
+    const d = await r.json();
+    if (!d.ok) {
+      SimpleNotification.error({ text: d.error || 'Could not delete document root' });
+    }
+  }
+
+  _undoTokens  = validTokens;
   _undoSection = 'vhosts';
   setUndoActive(_undoTokens.length > 0);
 
