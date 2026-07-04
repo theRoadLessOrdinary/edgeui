@@ -1,0 +1,11 @@
+# Defense-in-depth only — the intended deployment is `php -S 127.0.0.1:8765
+# router.php` via edgeui.service, where router.php itself already blocks
+# access to everything except /vendor, /login, /logout, /api/*, and the
+# auth-gated app (verified: even /.git/HEAD returns a redirect, not content).
+# This file only matters if this directory is ever served by real Apache
+# instead, whose default static-file serving would otherwise expose these.
+
+RedirectMatch 404 /\.git
+RedirectMatch 404 /\.auth-config\.php$
+RedirectMatch 404 /\.auth-throttle\.php$
+RedirectMatch 404 /\.gitignore$

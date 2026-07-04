@@ -192,7 +192,8 @@ main {
 .config-pill.enabled .port-tag { color: var(--blue); }
 .config-pill.deleting      { outline: 1px solid var(--red); }
 .config-pill.deleting-fade { opacity: 0; transition: opacity .3s ease; }
-.pill-host { color: var(--text-mute); font-size: .72rem; }
+.pill-host { color: var(--text-mute); font-size: .72rem; text-decoration: none; }
+.pill-host:hover { color: var(--blue); text-decoration: underline; }
 .badge {
   font-size: .7rem; font-weight: 700; letter-spacing: .05em;
   padding: 2px 8px; border-radius: 20px; text-transform: uppercase;
@@ -1097,6 +1098,11 @@ function dipRemoveRow(item, onGone) {
 // ── Site properties drawer ────────────────────────────────────────────────────
 let _activeSite = null; // { name, server_name, port, doc_root }
 
+function pillUrl(c) {
+  const scheme = String(c.port) === '443' ? 'https' : 'http';
+  return `${scheme}://${c.server_name || c.name}:${c.port}/`;
+}
+
 function apexDomain(configs) {
   let apex = '';
   configs.forEach(c => {
@@ -1557,7 +1563,7 @@ async function loadVhosts() {
     const pills = g.configs.map(c => `
       <div class="config-pill ${c.enabled ? 'enabled' : ''}" data-name="${c.name}">
         <span class="port-tag">:${c.port}</span>
-        <span class="pill-host">${c.server_name || c.name}</span>
+        <a class="pill-host" href="${pillUrl(c)}" target="_blank" rel="noopener" title="Open ${c.server_name || c.name}">${c.server_name || c.name}</a>
         <label class="toggle" title="${c.enabled ? 'Disable' : 'Enable'} :${c.port}">
           <input type="checkbox" ${c.enabled ? 'checked' : ''} onchange="toggleVhost('${c.name}', this.checked, this)">
           <div class="toggle-track"></div>
@@ -1655,7 +1661,7 @@ async function dpLoadSubdomains() {
   list.innerHTML = group.configs.map(c => `
     <div class="config-pill ${c.enabled ? 'enabled' : ''}" data-name="${c.name}">
       <span class="port-tag">:${c.port}</span>
-      <span class="pill-host">${c.server_name || c.name}</span>
+      <a class="pill-host" href="${pillUrl(c)}" target="_blank" rel="noopener" title="Open ${c.server_name || c.name}">${c.server_name || c.name}</a>
       <label class="toggle" title="${c.enabled ? 'Disable' : 'Enable'} :${c.port}">
         <input type="checkbox" ${c.enabled ? 'checked' : ''} onchange="toggleVhost('${c.name}', this.checked, this)">
         <div class="toggle-track"></div>

@@ -120,6 +120,19 @@ CONF;
         }
 
         file_put_contents($path, $conf);
+
+        // Seed a placeholder so a fresh vhost shows something immediately —
+        // but never touch a docroot that already has any content in it.
+        if (!is_dir($doc_root)) {
+            @mkdir($doc_root, 0755, true);
+        }
+        if (is_dir($doc_root)) {
+            $existing = array_diff(scandir($doc_root), ['.', '..']);
+            if (empty($existing)) {
+                file_put_contents(rtrim($doc_root, '/') . '/index.php', "<?php\nphpinfo();\n");
+            }
+        }
+
         echo json_encode(['ok' => true, 'path' => $path]);
         exit;
     }
