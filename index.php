@@ -249,6 +249,77 @@ input:focus {
   border-color: var(--blue);
 }
 input::placeholder { color: var(--text-mute); }
+.docroot-row { display: flex; gap: .5rem; }
+.docroot-row input { flex: 1; }
+.checkbox-label {
+  display: flex; align-items: center; gap: .5rem;
+  cursor: pointer; font-size: .85rem; color: var(--text-dim); font-weight: 500;
+}
+.checkbox-label input[type=checkbox] { width: auto; accent-color: var(--blue); cursor: pointer; }
+
+/* ── Folder picker dialog ── */
+dialog.folder-picker {
+  width: 560px; max-width: 92vw; max-height: 80vh;
+  background: var(--dark-2);
+  color: var(--text);
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: var(--radius);
+  padding: 0;
+}
+dialog.folder-picker[open] {
+  display: flex; flex-direction: column;
+}
+dialog.folder-picker::backdrop { background: rgba(0,0,0,.55); }
+.fp-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid rgba(255,255,255,.1);
+}
+.fp-title { font-size: .95rem; font-weight: 600; }
+.fp-close {
+  background: transparent; border: none; color: var(--text-mute);
+  font-size: 1.2rem; cursor: pointer; line-height: 1; padding: 2px 6px;
+}
+.fp-close:hover { color: var(--text); }
+.fp-breadcrumb {
+  padding: .6rem 1.25rem;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  font-size: .8rem; color: var(--text-mute);
+  white-space: nowrap; overflow-x: auto;
+}
+.fp-breadcrumb button {
+  background: none; border: none; color: var(--text-dim);
+  cursor: pointer; font-size: .8rem; font-family: var(--font);
+  padding: 2px 4px;
+}
+.fp-breadcrumb button:hover { color: var(--blue); }
+.fp-breadcrumb .fp-sep { color: var(--text-mute); margin: 0 2px; }
+.fp-list {
+  flex: 1; overflow-y: auto;
+  padding: .5rem;
+  min-height: 240px;
+}
+.fp-entry {
+  display: flex; align-items: center; gap: .6rem;
+  padding: .5rem .75rem; border-radius: 6px;
+  cursor: pointer; font-size: .85rem;
+}
+.fp-entry:hover { background: var(--dark-3); }
+.fp-entry .fp-icon { color: var(--gold); }
+.fp-entry.fp-disabled { color: var(--text-mute); cursor: not-allowed; opacity: .5; }
+.fp-empty { color: var(--text-mute); font-size: .85rem; padding: 1rem .75rem; }
+.fp-newfolder-row { display: flex; gap: .5rem; padding: 0 1.25rem 1rem; }
+.fp-newfolder-row input { flex: 1; }
+.fp-footer {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 1rem 1.25rem;
+  border-top: 1px solid rgba(255,255,255,.1);
+}
+.fp-current-path {
+  font-size: .78rem; color: var(--text-mute);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  margin-bottom: .6rem;
+}
 .code-textarea {
   background: var(--dark-3);
   border: 1px solid rgba(255,255,255,.16);
@@ -629,7 +700,16 @@ drawer-foot {
           </div>
           <div class="form-group">
             <label>Document root<span class="help-tip" tabindex="0" data-tip="The folder on disk holding this site's files — where its index.html or index.php lives.">?</span></label>
-            <input type="text" id="vh-docroot" placeholder="/var/www/mysite">
+            <div class="docroot-row">
+              <input type="text" id="vh-docroot" placeholder="/var/www/mysite">
+              <button type="button" class="btn btn-ghost btn-sm" onclick="openFolderPicker('vh-docroot')">Browse&hellip;</button>
+            </div>
+          </div>
+          <div class="form-group full">
+            <label class="checkbox-label">
+              <input type="checkbox" id="vh-add-hosts" checked>
+              Add server name to hosts (127.0.0.1)
+            </label>
           </div>
         </div>
         <button class="btn btn-blue" onclick="createVhost()">Create Virtual Host</button>
@@ -708,6 +788,7 @@ drawer-foot {
       <button class="drawer-tab" data-tab="rewrites">Rewrites</button>
       <button class="drawer-tab" data-tab="errors">Error Handling</button>
       <button class="drawer-tab" data-tab="htaccess">.htaccess</button>
+      <button class="drawer-tab" data-tab="subdomains">Subdomains</button>
     </div>
 
     <!-- Redirects tab -->
@@ -890,8 +971,61 @@ drawer-foot {
       <textarea id="dp-ht-content" class="code-textarea" spellcheck="false" placeholder="# No .htaccess file yet — anything you save here will create one"></textarea>
       <button class="btn btn-blue btn-sm" onclick="dpSaveHtaccess()" style="margin-top:1rem">Save .htaccess</button>
     </div>
+
+    <!-- Subdomains tab -->
+    <div class="drawer-panel" id="dp-subdomains">
+      <div class="help-intro">
+        Add a <strong>subdomain</strong> to this site — a separate Apache virtual host sharing the same
+        base domain, e.g. <code>api</code> becomes <code>api.example.com</code>. Each subdomain gets its
+        own config file and can point at a different document root.
+      </div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Subdomain<span class="help-tip" tabindex="0" data-tip="Just the prefix — e.g. enter 'api' to create api.example.com.">?</span></label>
+          <input type="text" id="dp-sub-prefix" placeholder="api">
+        </div>
+        <div class="form-group">
+          <label>Port<span class="help-tip" tabindex="0" data-tip="The network port Apache listens on for this subdomain. 80 is standard HTTP, 443 is HTTPS.">?</span></label>
+          <input type="number" id="dp-sub-port" value="80">
+        </div>
+        <div class="form-group">
+          <label>Document root<span class="help-tip" tabindex="0" data-tip="The folder on disk holding this subdomain's files. Defaults to the main site's document root.">?</span></label>
+          <div class="docroot-row">
+            <input type="text" id="dp-sub-docroot" placeholder="/var/www/mysite">
+            <button type="button" class="btn btn-ghost btn-sm" onclick="openFolderPicker('dp-sub-docroot')">Browse&hellip;</button>
+          </div>
+        </div>
+      </div>
+      <button class="btn btn-blue btn-sm" onclick="dpCreateSubdomain()" style="margin-bottom:1.25rem">Add Subdomain</button>
+      <div id="dp-subdomain-list" class="vhost-list"></div>
+    </div>
   </drawer-content>
 </me-drawer>
+
+<!-- Folder picker dialog ── used by any "Browse…" button next to a document root field -->
+<dialog id="folder-picker-dialog" class="folder-picker">
+  <div class="fp-header">
+    <span class="fp-title">Choose a folder</span>
+    <button type="button" class="fp-close" onclick="fpClose()">&times;</button>
+  </div>
+  <div class="fp-breadcrumb" id="fp-breadcrumb"></div>
+  <div class="fp-list" id="fp-list"></div>
+  <div class="fp-newfolder-row" id="fp-newfolder-row" style="display:none">
+    <input type="text" id="fp-newfolder-name" placeholder="New folder name">
+    <button type="button" class="btn btn-blue btn-sm" onclick="fpConfirmNewFolder()">Create</button>
+    <button type="button" class="btn btn-ghost btn-sm" onclick="fpCancelNewFolder()">Cancel</button>
+  </div>
+  <div class="fp-footer">
+    <div>
+      <div class="fp-current-path" id="fp-current-path"></div>
+      <button type="button" class="btn btn-ghost btn-sm" id="fp-newfolder-btn" onclick="fpShowNewFolder()">+ New Folder</button>
+    </div>
+    <div style="display:flex; gap:.5rem;">
+      <button type="button" class="btn btn-ghost btn-sm" onclick="fpClose()">Cancel</button>
+      <button type="button" class="btn btn-blue btn-sm" id="fp-select-btn" onclick="fpSelectCurrent()" disabled>Select This Folder</button>
+    </div>
+  </div>
+</dialog>
 
 <script src="/vendor/SimpleNotification/simpleNotification.min.js"></script>
 <script src="/vendor/delete-in-place.js"></script>
@@ -912,11 +1046,20 @@ function dipRemoveRow(item, onGone) {
 // ── Site properties drawer ────────────────────────────────────────────────────
 let _activeSite = null; // { name, server_name, port, doc_root }
 
+function apexDomain(configs) {
+  let apex = '';
+  configs.forEach(c => {
+    if (!c.server_name) return;
+    if (!apex || c.server_name.split('.').length < apex.split('.').length) apex = c.server_name;
+  });
+  return apex;
+}
+
 function openSiteProps(sld) {
   const group = window._vhostGroups[sld];
   if (!group) return;
   const c    = group.configs[0];
-  _activeSite = { name: c.name, server_name: c.server_name, port: c.port, doc_root: group.doc_root };
+  _activeSite = { name: c.name, server_name: c.server_name, port: c.port, doc_root: group.doc_root, sld, baseDomain: apexDomain(group.configs) };
 
   document.getElementById('site-drawer-title').textContent = c.server_name || c.name;
   document.getElementById('site-drawer').classList.add('open');
@@ -946,6 +1089,7 @@ function switchDrawerTab(tab) {
   if (tab === 'rewrites')  dpLoadRewrites();
   if (tab === 'errors')    dpLoadErrors();
   if (tab === 'htaccess')  dpLoadHtaccess();
+  if (tab === 'subdomains') dpLoadSubdomains();
 }
 
 // ── Drawer: Redirects ─────────────────────────────────────────────────────────
@@ -1441,11 +1585,88 @@ function showInlineError(item, message) {
   setTimeout(() => err.classList.remove('show'), 5000);
 }
 
+// ── Drawer: Subdomains ─────────────────────────────────────────────────────────
+async function dpLoadSubdomains() {
+  if (!_activeSite) return;
+  const list = document.getElementById('dp-subdomain-list');
+  list.innerHTML = '<div class="empty">Loading…</div>';
+
+  document.getElementById('dp-sub-docroot').value = _activeSite.doc_root || '';
+
+  const r = await fetch('/api/vhosts');
+  const vhosts = await r.json();
+  window._vhostGroups = {};
+  vhosts.forEach(g => { window._vhostGroups[g.sld || g.configs[0].name] = g; });
+
+  const group = window._vhostGroups[_activeSite.sld];
+  if (!group || !group.configs.length) { list.innerHTML = '<div class="empty">No configs</div>'; return; }
+
+  list.innerHTML = group.configs.map(c => `
+    <div class="config-pill ${c.enabled ? 'enabled' : ''}" data-name="${c.name}">
+      <span class="port-tag">:${c.port}</span>
+      <span class="pill-host">${c.server_name || c.name}</span>
+      <label class="toggle" title="${c.enabled ? 'Disable' : 'Enable'} :${c.port}">
+        <input type="checkbox" ${c.enabled ? 'checked' : ''} onchange="toggleVhost('${c.name}', this.checked, this)">
+        <div class="toggle-track"></div>
+        <div class="toggle-thumb"></div>
+      </label>
+      <delete-in-place caption="&times;" confirm="ok?" data-name="${c.name}" title="Delete ${c.server_name || c.name}"></delete-in-place>
+    </div>
+  `).join('');
+}
+
+document.getElementById('dp-subdomain-list').addEventListener('dip-confirm', function (e) {
+  if (e.detail['data-name']) dpDeleteSubdomain(e.detail['data-name'], e.target.closest('.config-pill'));
+});
+
+async function dpDeleteSubdomain(name, pill) {
+  const token = await deleteVhost(name);
+  _undoTokens  = token ? [token] : [];
+  _undoSection = 'vhosts';
+  setUndoActive(_undoTokens.length > 0);
+  dipRemoveRow(pill, () => { dpLoadSubdomains(); loadVhosts(); });
+}
+
+async function dpCreateSubdomain() {
+  if (!_activeSite) return;
+  const prefix  = document.getElementById('dp-sub-prefix').value.trim().toLowerCase();
+  const port    = document.getElementById('dp-sub-port').value.trim() || '80';
+  const docRoot = document.getElementById('dp-sub-docroot').value.trim() || _activeSite.doc_root;
+
+  if (!prefix) { SimpleNotification.error({ text: 'Subdomain is required.' }); return; }
+  if (!/^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/.test(prefix)) {
+    SimpleNotification.error({ text: 'Subdomain may only contain letters, numbers, and hyphens.' });
+    return;
+  }
+  if (!_activeSite.baseDomain) { SimpleNotification.error({ text: "This site has no domain to attach a subdomain to." }); return; }
+  if (!docRoot) { SimpleNotification.error({ text: 'Document root is required.' }); return; }
+
+  const serverName = `${prefix}.${_activeSite.baseDomain}`;
+  const name        = serverName.replace(/[^a-zA-Z0-9._-]/g, '');
+
+  const r = await fetch('/api/vhosts', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ action: 'create', name, port, server_name: serverName, doc_root: docRoot })
+  });
+  const d = await r.json();
+
+  if (d.ok) {
+    SimpleNotification.success({ text: `${serverName} created.` });
+    document.getElementById('dp-sub-prefix').value = '';
+    dpLoadSubdomains();
+    loadVhosts();
+  } else {
+    SimpleNotification.error({ text: d.error || 'Unknown error' });
+  }
+}
+
 async function createVhost() {
   const name       = document.getElementById('vh-name').value.trim();
   const port       = document.getElementById('vh-port').value.trim();
   const serverName = document.getElementById('vh-servername').value.trim();
   const docRoot    = document.getElementById('vh-docroot').value.trim();
+  const addHosts   = document.getElementById('vh-add-hosts').checked;
 
   if (!name || !serverName || !docRoot) {
     SimpleNotification.error({ text: 'Config name, server name, and document root are required.' });
@@ -1460,6 +1681,17 @@ async function createVhost() {
   const d = await r.json();
 
   if (d.ok) {
+    if (addHosts) {
+      const hr = await fetch('/api/hosts', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ action: 'append', host: serverName, ip: '127.0.0.1' })
+      });
+      const hd = await hr.json();
+      if (!hr.ok) {
+        SimpleNotification.error({ text: 'Virtual host created, but hosts entry failed: ' + (hd.error || 'unknown error') });
+      }
+    }
     SimpleNotification.success({ text: 'Virtual host created.' });
     document.getElementById('vh-name').value = '';
     document.getElementById('vh-servername').value = '';
@@ -1644,7 +1876,119 @@ document.querySelectorAll('.help-tip').forEach(el => {
   el.addEventListener('focus', () => positionHelpTip(el));
 });
 
+// ── Folder picker dialog ───────────────────────────────────────────────────────
+let _fpTargetInput = null;
+let _fpCurrentPath = null;
+let _fpWritable     = false;
 
+function openFolderPicker(targetInputId) {
+  _fpTargetInput  = targetInputId;
+  _fpCurrentPath  = null; // stale path from a previous open must never be selectable
+  document.getElementById('fp-select-btn').disabled = true;
+  document.getElementById('fp-list').innerHTML = '<div class="fp-empty">Loading&hellip;</div>';
+
+  const existing = document.getElementById(targetInputId).value.trim();
+  const start    = existing || '/media/william/8TB-DRIVE/www/sites';
+  document.getElementById('folder-picker-dialog').showModal();
+  fpNavigate(start);
+}
+
+function fpClose() {
+  fpCancelNewFolder();
+  document.getElementById('folder-picker-dialog').close();
+}
+
+async function fpNavigate(path) {
+  let r, d;
+  try {
+    r = await fetch('/api/browse?path=' + encodeURIComponent(path));
+    d = await r.json();
+  } catch (e) {
+    SimpleNotification.error({ text: 'Could not reach the server to browse folders.' });
+    return;
+  }
+
+  if (!r.ok) {
+    // Path doesn't exist (e.g. typed manually) — fall back to a sane default once
+    if (path !== '/media/william/8TB-DRIVE/www/sites') {
+      fpNavigate('/media/william/8TB-DRIVE/www/sites');
+    } else {
+      SimpleNotification.error({ text: d.error || 'Could not browse that folder.' });
+    }
+    return;
+  }
+  _fpCurrentPath = d.path;
+  _fpWritable    = d.writable;
+  fpRenderBreadcrumb(d.path);
+  fpRenderList(d);
+  document.getElementById('fp-current-path').textContent = d.path;
+  document.getElementById('fp-select-btn').disabled = false;
+}
+
+function fpRenderBreadcrumb(path) {
+  const parts = path.split('/').filter(p => p !== '');
+  let acc = '';
+  const bc = document.getElementById('fp-breadcrumb');
+  bc.innerHTML = '<button type="button" onclick="fpNavigate(\'/\')">/</button>';
+  parts.forEach((part, i) => {
+    acc += '/' + part;
+    const p = acc;
+    bc.innerHTML += '<span class="fp-sep">/</span><button type="button" onclick="fpNavigate(\'' + p.replace(/'/g, "\\'") + '\')">' + part.replace(/</g, '&lt;') + '</button>';
+  });
+}
+
+function fpRenderList(d) {
+  const list = document.getElementById('fp-list');
+  if (!d.entries.length) {
+    list.innerHTML = '<div class="fp-empty">No subfolders here.</div>';
+    return;
+  }
+  list.innerHTML = d.entries.map(e => `
+    <div class="fp-entry" onclick="fpNavigate('${(d.path + '/' + e.name).replace(/'/g, "\\'")}')">
+      <span class="fp-icon">&#128193;</span>
+      <span>${e.name.replace(/</g, '&lt;')}</span>
+    </div>
+  `).join('');
+}
+
+function fpSelectCurrent() {
+  if (!_fpCurrentPath || !_fpTargetInput) {
+    SimpleNotification.error({ text: 'Still loading — try again in a moment.' });
+    return;
+  }
+  document.getElementById(_fpTargetInput).value = _fpCurrentPath;
+  fpClose();
+}
+
+function fpShowNewFolder() {
+  if (!_fpWritable) { SimpleNotification.error({ text: 'This folder is not writable.' }); return; }
+  document.getElementById('fp-newfolder-row').style.display = 'flex';
+  document.getElementById('fp-newfolder-name').value = '';
+  document.getElementById('fp-newfolder-name').focus();
+}
+
+function fpCancelNewFolder() {
+  document.getElementById('fp-newfolder-row').style.display = 'none';
+}
+
+async function fpConfirmNewFolder() {
+  const name = document.getElementById('fp-newfolder-name').value.trim();
+  if (!name) return;
+
+  const r = await fetch('/api/browse', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ action: 'mkdir', path: _fpCurrentPath, name })
+  });
+  const d = await r.json();
+
+  if (d.ok) {
+    fpCancelNewFolder();
+    fpNavigate(_fpCurrentPath);
+  } else {
+    SimpleNotification.error({ text: d.error || 'Could not create folder' });
+  }
+}
 </script>
 </body>
 </html>

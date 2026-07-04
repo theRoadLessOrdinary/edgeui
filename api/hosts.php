@@ -58,6 +58,45 @@ if ($method === 'POST') {
         exit;
     }
 
+    if ($action === 'append') {
+        // Add a single "IP  host" mapping to the local section — used when creating
+        // a vhost with "add server name to hosts" checked. Skips if already present
+        // anywhere in the local section rather than creating a duplicate/conflicting line.
+        $host = trim(preg_replace('/[\x00-\x1F\x7F\s]/', '', $body['host'] ?? ''));
+        $ip   = trim(preg_replace('/[^0-9a-fA-F.:]/', '', $body['ip'] ?? '')) ?: '127.0.0.1';
+
+        if (!$host) {
+            http_response_code(400);
+            echo json_encode(['error' => 'host is required']);
+            exit;
+        }
+
+        $current = file_exists($path) ? file_get_contents($path) : '';
+        $parts   = split_hosts($current, $marker);
+        $local   = $parts['local'];
+        $after   = $parts['after'] ?? '';
+
+        foreach (explode("\n", $local) as $line) {
+            $trimmed = trim(preg_replace('/#.*/', '', $line));
+            if ($trimmed === '') continue;
+            $fields = preg_split('/\s+/', $trimmed);
+            if (in_array($host, array_slice($fields, 1), true)) {
+                echo json_encode(['ok' => true, 'skipped' => true]);
+                exit;
+            }
+        }
+
+        $newLocal = rtrim($local, "\n") . "\n{$ip}\t{$host}";
+
+        if (!is_dir($backdir)) mkdir($backdir, 0700, true);
+        $token = (string) time();
+        if (file_exists($path)) copy($path, "$backdir/$token.hosts");
+
+        file_put_contents($path, $newLocal . "\n" . $marker . "\n" . $after);
+        echo json_encode(['ok' => true, 'token' => $token]);
+        exit;
+    }
+
     if ($action === 'restore') {
         $token  = preg_replace('/[^0-9]/', '', $body['token'] ?? '');
         $backup = "$backdir/$token.hosts";

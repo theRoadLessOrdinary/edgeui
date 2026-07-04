@@ -7,6 +7,20 @@ a browser instead of hand-editing `.conf` files.
 Built for personal/internal use on one machine. It's intentionally minimal: no build step, no
 framework, no database — a couple of PHP files and a bit of vanilla JS.
 
+> **Use at your own risk.** This tool runs as root, has no authentication, and writes directly to
+> live system files (`/etc/apache2/sites-available`, `/etc/hosts`) and executes system commands
+> (`a2ensite`, `apachectl`, etc.) on your behalf with no confirmation beyond the UI's own
+> click-to-confirm controls. It is provided "as is," with no warranty of any kind — see
+> [LICENSE](LICENSE). **It is unsafe to run this**:
+> - on any machine reachable by more than one person, or by anyone you don't trust with root
+> - bound to any network interface other than `127.0.0.1`, or exposed via a reverse proxy, tunnel,
+>   or port-forward, without adding real authentication in front of it first
+> - on a shared or production server where an unintended vhost/redirect/rewrite change, or a bad
+>   `apachectl graceful`, could take down something other people depend on
+>
+> It is only reasonably safe as described below: bound to localhost, on a single-user personal
+> machine, operated by the person who owns that machine.
+
 ## Requirements
 
 - PHP 8+ (uses `str_starts_with`, `match`, etc.)
