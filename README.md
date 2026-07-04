@@ -20,6 +20,10 @@ framework, no database — a couple of PHP files and a bit of vanilla JS.
 >
 > It is only reasonably safe as described below: bound to localhost, on a single-user personal
 > machine, operated by the person who owns that machine.
+>
+> On first run it auto-creates a login with the password `admin1234` — that default is public
+> (this repo is public on GitHub), so **change it immediately** via the "Change Password" link in
+> the sidebar once you're in.
 
 ## Requirements
 
@@ -70,9 +74,19 @@ before it's applied — a global **Undo** button restores the last change and re
 
 ## Security notes
 
-- No authentication. This only makes sense because the service is bound to `127.0.0.1` and used
-  by a single person at the machine console — don't put this behind a reverse proxy or bind it to
-  a non-localhost interface without adding auth first.
+- Password-protected via a session login (`login.php`/`logout.php`, gated in `router.php`).
+  The hash lives in `.auth-config.php` (gitignored — never commit it). Auto-created with the
+  default password `admin1234` on first run — change it immediately from the sidebar's "Change
+  Password" link (or run `php set-password.php` from the command line). This exists mainly to
+  contain the **local-pivot** risk: since the service is bound to `127.0.0.1`, it was never
+  reachable over the network, but loopback binding doesn't distinguish *which local process* is
+  asking — if any other site/process on the same machine were ever compromised, it could
+  previously reach this service's full root-level API with zero barrier. A password doesn't fix
+  a network exposure that didn't exist; it fixes the same-machine one that did — but only once
+  the default has actually been changed.
+- Still don't put this behind a reverse proxy or bind it to a non-localhost interface — the auth
+  here is a single shared password with basic throttling, not a substitute for real access control
+  on a multi-user or internet-facing deployment.
 - The service runs as root (needed for `a2ensite`/`a2dissite`/`apachectl` and writing to
   `/etc/apache2/sites-available`), so treat it with the same care as shell access to the box.
 - Path traversal and Apache-directive-injection protections are in place (`router.php`'s

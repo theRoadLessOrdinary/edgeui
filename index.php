@@ -638,6 +638,7 @@ drawer-foot {
       <div class="status-dot" id="status-dot"></div>
       <span id="status-text">Checking…</span>
     </div>
+    <a href="/logout" class="btn btn-ghost btn-sm">Log out</a>
   </div>
 </nav>
 
@@ -663,6 +664,15 @@ drawer-foot {
         <button data-page="hosts">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z"/></svg>
           Hosts File
+        </button>
+      </div>
+    </div>
+    <div class="sidebar-section" style="margin-top:1.5rem">
+      <div class="sidebar-label">Account</div>
+      <div class="sidebar-nav">
+        <button type="button" onclick="document.getElementById('change-password-dialog').showModal()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          Change Password
         </button>
       </div>
     </div>
@@ -1027,9 +1037,50 @@ drawer-foot {
   </div>
 </dialog>
 
+<!-- Change password dialog -->
+<dialog id="change-password-dialog" class="folder-picker">
+  <div class="fp-header">
+    <span class="fp-title">Change password</span>
+    <button type="button" class="fp-close" onclick="document.getElementById('change-password-dialog').close()">&times;</button>
+  </div>
+  <div style="padding: 1.25rem;">
+    <div class="form-group" style="margin-bottom: 1rem;">
+      <label>Current password</label>
+      <input type="password" id="cp-current" autocomplete="current-password">
+    </div>
+    <div class="form-group" style="margin-bottom: 1rem;">
+      <label>New password<span class="help-tip" tabindex="0" data-tip="At least 8 characters.">?</span></label>
+      <input type="password" id="cp-new" autocomplete="new-password">
+    </div>
+    <div class="form-group">
+      <label>Confirm new password</label>
+      <input type="password" id="cp-confirm" autocomplete="new-password">
+    </div>
+  </div>
+  <div class="fp-footer" style="justify-content: flex-end; gap: .5rem;">
+    <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('change-password-dialog').close()">Cancel</button>
+    <button type="button" class="btn btn-blue btn-sm" onclick="submitChangePassword()">Change Password</button>
+  </div>
+</dialog>
+
 <script src="/vendor/SimpleNotification/simpleNotification.min.js"></script>
 <script src="/vendor/delete-in-place.js"></script>
 <script>
+// ── Session expiry: redirect straight to login on any 401, instead of ──────────
+// ── surfacing it as a generic error notification on whatever API call hit it ──
+(function() {
+  const origFetch = window.fetch;
+  window.fetch = function(...args) {
+    return origFetch.apply(this, args).then(response => {
+      if (response.status === 401) {
+        window.location.href = '/login';
+        return new Promise(() => {}); // never resolve — caller's .then()/catch() never runs
+      }
+      return response;
+    });
+  };
+})();
+
 // ── Notifications ─────────────────────────────────────────────────────────────
 function notifyOk(msg)  { SimpleNotification.success({ text: msg }); }
 function notifyErr(msg) { SimpleNotification.error({ text: msg }); }
@@ -1987,6 +2038,43 @@ async function fpConfirmNewFolder() {
     fpNavigate(_fpCurrentPath);
   } else {
     SimpleNotification.error({ text: d.error || 'Could not create folder' });
+  }
+}
+
+// ── Change password dialog ─────────────────────────────────────────────────────
+async function submitChangePassword() {
+  const current = document.getElementById('cp-current').value;
+  const next     = document.getElementById('cp-new').value;
+  const confirm  = document.getElementById('cp-confirm').value;
+
+  if (!current || !next) {
+    SimpleNotification.error({ text: 'All fields are required.' });
+    return;
+  }
+  if (next.length < 8) {
+    SimpleNotification.error({ text: 'New password must be at least 8 characters.' });
+    return;
+  }
+  if (next !== confirm) {
+    SimpleNotification.error({ text: 'New passwords do not match.' });
+    return;
+  }
+
+  const r = await fetch('/api/change-password', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ current_password: current, new_password: next })
+  });
+  const d = await r.json();
+
+  if (d.ok) {
+    SimpleNotification.success({ text: 'Password changed.' });
+    document.getElementById('cp-current').value = '';
+    document.getElementById('cp-new').value = '';
+    document.getElementById('cp-confirm').value = '';
+    document.getElementById('change-password-dialog').close();
+  } else {
+    SimpleNotification.error({ text: d.error || 'Could not change password' });
   }
 }
 </script>
