@@ -98,13 +98,15 @@ if ($method === 'POST') {
     }
 
     if ($action === 'disable' || $action === 'enable') {
+        // Only ever touches the section below the marker (entries from other tools,
+        // e.g. an ad-block list) — the local section is what EdgeUI manages and always stays active.
         $current = file_exists($path) ? file_get_contents($path) : '';
         $parts   = split_hosts($current, $marker);
         $local   = $parts['local'];
         $after   = $parts['after'] ?? '';
 
         $prefix = '#DISABLED# ';
-        $lines  = explode("\n", $local);
+        $lines  = explode("\n", $after);
         foreach ($lines as &$line) {
             if ($action === 'disable') {
                 if (trim($line) === '' || str_starts_with(ltrim($line), '#')) continue;
@@ -116,13 +118,13 @@ if ($method === 'POST') {
             }
         }
         unset($line);
-        $newLocal = implode("\n", $lines);
+        $newAfter = implode("\n", $lines);
 
         if (!is_dir($backdir)) mkdir($backdir, 0700, true);
         $token = (string) time();
         if (file_exists($path)) copy($path, "$backdir/$token.hosts");
 
-        file_put_contents($path, $newLocal . "\n" . $marker . "\n" . $after);
+        file_put_contents($path, $local . "\n" . $marker . "\n" . $newAfter);
         echo json_encode(['ok' => true, 'token' => $token]);
         exit;
     }

@@ -781,8 +781,8 @@ drawer-foot {
         <textarea id="hosts-local" class="code-textarea" spellcheck="false" style="min-height:220px"></textarea>
         <div id="hosts-after-wrap" class="redirect-label" style="display:none;margin-top:.75rem"></div>
         <button class="btn btn-blue btn-sm" onclick="saveHostsFile()" style="margin-top:1.25rem">Save Hosts File</button>
-        <button class="btn btn-ghost btn-sm" onclick="disableHostsFile()" style="margin-top:1.25rem">Disable Hosts</button>
-        <button class="btn btn-ghost btn-sm" onclick="enableHostsFile()" style="margin-top:1.25rem">Re-enable Hosts</button>
+        <button class="btn btn-ghost btn-sm" onclick="disableHostsFile()" style="margin-top:1.25rem" title="Comments out the entries below the marker only — local entries always stay active">Disable External Entries</button>
+        <button class="btn btn-ghost btn-sm" onclick="enableHostsFile()" style="margin-top:1.25rem" title="Re-enables the entries below the marker">Re-enable External Entries</button>
       </div>
     </div>
 
@@ -2000,7 +2000,7 @@ async function saveHostsFile() {
 }
 
 async function disableHostsFile() {
-  if (!confirm('Comment out all local /etc/hosts entries?')) return;
+  if (!confirm('Comment out the entries below the marker (e.g. an ad-block list)? Local entries are left active.')) return;
   const r = await fetch('/api/hosts', {
     method: 'POST', headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ action: 'disable' })
@@ -2008,7 +2008,7 @@ async function disableHostsFile() {
   const d = await r.json();
   if (d.ok) {
     _undoTokens = [d.token]; _undoSection = 'hosts'; setUndoActive(true);
-    notifyOk('Hosts file disabled.');
+    notifyOk('External hosts entries disabled.');
     loadHostsFile();
   } else { notifyErr(d.error || 'Failed to disable'); }
 }
@@ -2021,7 +2021,7 @@ async function enableHostsFile() {
   const d = await r.json();
   if (d.ok) {
     _undoTokens = [d.token]; _undoSection = 'hosts'; setUndoActive(true);
-    notifyOk('Hosts file re-enabled.');
+    notifyOk('External hosts entries re-enabled.');
     loadHostsFile();
   } else { notifyErr(d.error || 'Failed to re-enable'); }
 }
