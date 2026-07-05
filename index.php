@@ -639,6 +639,7 @@ drawer-foot {
       <div class="status-dot" id="status-dot"></div>
       <span id="status-text">Checking…</span>
     </div>
+    <button class="btn btn-ghost btn-sm" id="btn-restart-apache" onclick="restartApache()">Restart Apache</button>
     <a href="/logout" class="btn btn-ghost btn-sm">Log out</a>
   </div>
 </nav>
@@ -1540,6 +1541,23 @@ async function checkStatus() {
 }
 checkStatus();
 setInterval(checkStatus, 15000);
+
+async function restartApache() {
+  if (!confirm('Restart Apache now? This will briefly interrupt all sites.')) return;
+  const btn = document.getElementById('btn-restart-apache');
+  btn.disabled = true;
+  try {
+    const r = await fetch('/api/restart', { method: 'POST' });
+    const d = await r.json();
+    if (d.ok) { notifyOk('Apache restarted.'); }
+    else { notifyErr(d.output || 'Restart failed'); }
+    checkStatus();
+  } catch (e) {
+    notifyErr('Restart failed');
+  } finally {
+    btn.disabled = false;
+  }
+}
 
 // ── Virtual Hosts ─────────────────────────────────────────────────────────────
 async function loadVhosts() {
