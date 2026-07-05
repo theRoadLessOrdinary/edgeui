@@ -639,7 +639,7 @@ drawer-foot {
       <div class="status-dot" id="status-dot"></div>
       <span id="status-text">Checking…</span>
     </div>
-    <button class="btn btn-ghost btn-sm" id="btn-restart-apache" onclick="restartApache()">Restart Apache</button>
+    <delete-in-place id="btn-restart-apache" caption="Restart Apache" confirm="ok?"></delete-in-place>
     <a href="/logout" class="btn btn-ghost btn-sm">Log out</a>
   </div>
 </nav>
@@ -781,8 +781,10 @@ drawer-foot {
         <textarea id="hosts-local" class="code-textarea" spellcheck="false" style="min-height:220px"></textarea>
         <div id="hosts-after-wrap" class="redirect-label" style="display:none;margin-top:.75rem"></div>
         <button class="btn btn-blue btn-sm" onclick="saveHostsFile()" style="margin-top:1.25rem">Save Hosts File</button>
-        <button class="btn btn-ghost btn-sm" id="btn-hosts-disable" onclick="disableHostsFile()" style="margin-top:1.25rem;display:none" title="Comments out the entries below the marker only — local entries always stay active">Disable External Entries</button>
-        <button class="btn btn-ghost btn-sm" id="btn-hosts-enable" onclick="enableHostsFile()" style="margin-top:1.25rem;display:none" title="Re-enables the entries below the marker">Re-enable External Entries</button>
+        <div style="margin-top:1.25rem">
+          <delete-in-place id="btn-hosts-disable" caption="Disable External Entries" confirm="ok?" style="display:none" title="Comments out the entries below the marker only — local entries always stay active"></delete-in-place>
+          <delete-in-place id="btn-hosts-enable" caption="Re-enable External Entries" confirm="ok?" style="display:none" title="Re-enables the entries below the marker"></delete-in-place>
+        </div>
       </div>
     </div>
 
@@ -1544,10 +1546,10 @@ async function checkStatus() {
 checkStatus();
 setInterval(checkStatus, 15000);
 
+let _restartInFlight = false;
 async function restartApache() {
-  if (!confirm('Restart Apache now? This will briefly interrupt all sites.')) return;
-  const btn = document.getElementById('btn-restart-apache');
-  btn.disabled = true;
+  if (_restartInFlight) return;
+  _restartInFlight = true;
   try {
     const r = await fetch('/api/restart', { method: 'POST' });
     const d = await r.json();
@@ -1557,9 +1559,10 @@ async function restartApache() {
   } catch (e) {
     notifyErr('Restart failed');
   } finally {
-    btn.disabled = false;
+    _restartInFlight = false;
   }
 }
+document.getElementById('btn-restart-apache').addEventListener('dip-confirm', restartApache);
 
 // ── Virtual Hosts ─────────────────────────────────────────────────────────────
 async function loadVhosts() {
@@ -2002,7 +2005,6 @@ async function saveHostsFile() {
 }
 
 async function disableHostsFile() {
-  if (!confirm('Comment out the entries below the marker (e.g. an ad-block list)? Local entries are left active.')) return;
   const r = await fetch('/api/hosts', {
     method: 'POST', headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ action: 'disable' })
@@ -2027,6 +2029,8 @@ async function enableHostsFile() {
     loadHostsFile();
   } else { notifyErr(d.error || 'Failed to re-enable'); }
 }
+document.getElementById('btn-hosts-disable').addEventListener('dip-confirm', disableHostsFile);
+document.getElementById('btn-hosts-enable').addEventListener('dip-confirm', enableHostsFile);
 
 // ── Help tip collision avoidance ────────────────────────────────────────────────
 function positionHelpTip(el) {
