@@ -781,6 +781,8 @@ drawer-foot {
         <textarea id="hosts-local" class="code-textarea" spellcheck="false" style="min-height:220px"></textarea>
         <div id="hosts-after-wrap" class="redirect-label" style="display:none;margin-top:.75rem"></div>
         <button class="btn btn-blue btn-sm" onclick="saveHostsFile()" style="margin-top:1.25rem">Save Hosts File</button>
+        <button class="btn btn-ghost btn-sm" onclick="disableHostsFile()" style="margin-top:1.25rem">Disable Hosts</button>
+        <button class="btn btn-ghost btn-sm" onclick="enableHostsFile()" style="margin-top:1.25rem">Re-enable Hosts</button>
       </div>
     </div>
 
@@ -1995,6 +1997,33 @@ async function saveHostsFile() {
     notifyOk('Hosts file saved.');
     loadHostsFile();
   } else { notifyErr(d.error || 'Failed to save'); }
+}
+
+async function disableHostsFile() {
+  if (!confirm('Comment out all local /etc/hosts entries?')) return;
+  const r = await fetch('/api/hosts', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ action: 'disable' })
+  });
+  const d = await r.json();
+  if (d.ok) {
+    _undoTokens = [d.token]; _undoSection = 'hosts'; setUndoActive(true);
+    notifyOk('Hosts file disabled.');
+    loadHostsFile();
+  } else { notifyErr(d.error || 'Failed to disable'); }
+}
+
+async function enableHostsFile() {
+  const r = await fetch('/api/hosts', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ action: 'enable' })
+  });
+  const d = await r.json();
+  if (d.ok) {
+    _undoTokens = [d.token]; _undoSection = 'hosts'; setUndoActive(true);
+    notifyOk('Hosts file re-enabled.');
+    loadHostsFile();
+  } else { notifyErr(d.error || 'Failed to re-enable'); }
 }
 
 // ── Help tip collision avoidance ────────────────────────────────────────────────

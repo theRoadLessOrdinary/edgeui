@@ -97,6 +97,36 @@ if ($method === 'POST') {
         exit;
     }
 
+    if ($action === 'disable' || $action === 'enable') {
+        $current = file_exists($path) ? file_get_contents($path) : '';
+        $parts   = split_hosts($current, $marker);
+        $local   = $parts['local'];
+        $after   = $parts['after'] ?? '';
+
+        $prefix = '#DISABLED# ';
+        $lines  = explode("\n", $local);
+        foreach ($lines as &$line) {
+            if ($action === 'disable') {
+                if (trim($line) === '' || str_starts_with(ltrim($line), '#')) continue;
+                $line = $prefix . $line;
+            } else {
+                if (str_starts_with(ltrim($line), $prefix)) {
+                    $line = preg_replace('/^(\s*)' . preg_quote($prefix, '/') . '/', '$1', $line);
+                }
+            }
+        }
+        unset($line);
+        $newLocal = implode("\n", $lines);
+
+        if (!is_dir($backdir)) mkdir($backdir, 0700, true);
+        $token = (string) time();
+        if (file_exists($path)) copy($path, "$backdir/$token.hosts");
+
+        file_put_contents($path, $newLocal . "\n" . $marker . "\n" . $after);
+        echo json_encode(['ok' => true, 'token' => $token]);
+        exit;
+    }
+
     if ($action === 'restore') {
         $token  = preg_replace('/[^0-9]/', '', $body['token'] ?? '');
         $backup = "$backdir/$token.hosts";
