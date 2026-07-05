@@ -781,8 +781,8 @@ drawer-foot {
         <textarea id="hosts-local" class="code-textarea" spellcheck="false" style="min-height:220px"></textarea>
         <div id="hosts-after-wrap" class="redirect-label" style="display:none;margin-top:.75rem"></div>
         <button class="btn btn-blue btn-sm" onclick="saveHostsFile()" style="margin-top:1.25rem">Save Hosts File</button>
-        <button class="btn btn-ghost btn-sm" onclick="disableHostsFile()" style="margin-top:1.25rem" title="Comments out the entries below the marker only — local entries always stay active">Disable External Entries</button>
-        <button class="btn btn-ghost btn-sm" onclick="enableHostsFile()" style="margin-top:1.25rem" title="Re-enables the entries below the marker">Re-enable External Entries</button>
+        <button class="btn btn-ghost btn-sm" id="btn-hosts-disable" onclick="disableHostsFile()" style="margin-top:1.25rem;display:none" title="Comments out the entries below the marker only — local entries always stay active">Disable External Entries</button>
+        <button class="btn btn-ghost btn-sm" id="btn-hosts-enable" onclick="enableHostsFile()" style="margin-top:1.25rem;display:none" title="Re-enables the entries below the marker">Re-enable External Entries</button>
       </div>
     </div>
 
@@ -1983,6 +1983,8 @@ async function loadHostsFile() {
   } else {
     afterWrap.style.display = 'none';
   }
+  document.getElementById('btn-hosts-disable').style.display = d.after_active   ? '' : 'none';
+  document.getElementById('btn-hosts-enable').style.display  = d.after_disabled ? '' : 'none';
 }
 
 async function saveHostsFile() {

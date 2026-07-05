@@ -24,11 +24,23 @@ if ($method === 'GET') {
     $afterLines = $parts['after'] !== null && $parts['after'] !== ''
         ? substr_count(rtrim($parts['after'], "\n"), "\n") + 1
         : 0;
+
+    $prefix      = '#DISABLED# ';
+    $hasActive   = false;
+    $hasDisabled = false;
+    foreach (explode("\n", $parts['after'] ?? '') as $line) {
+        if (trim($line) === '') continue;
+        if (str_starts_with(ltrim($line), $prefix)) { $hasDisabled = true; }
+        elseif (!str_starts_with(ltrim($line), '#')) { $hasActive = true; }
+    }
+
     echo json_encode([
-        'local'       => $parts['local'],
-        'has_marker'  => $parts['after'] !== null,
-        'after_lines' => $afterLines,
-        'after_bytes' => $parts['after'] !== null ? strlen($parts['after']) : 0,
+        'local'        => $parts['local'],
+        'has_marker'   => $parts['after'] !== null,
+        'after_lines'  => $afterLines,
+        'after_bytes'  => $parts['after'] !== null ? strlen($parts['after']) : 0,
+        'after_active'   => $hasActive,
+        'after_disabled' => $hasDisabled,
     ]);
     exit;
 }
