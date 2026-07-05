@@ -205,6 +205,9 @@ main {
 delete-in-place { font-size: .78rem; line-height: 1; flex-shrink: 0; }
 delete-in-place .dip-confirm { font-weight: 600; }
 
+/* Hard width so flanking nav items don't shift when "Restart Apache" swaps to "ok?" */
+#btn-restart-apache { display: inline-block; width: 8.5rem; text-align: center; white-space: nowrap; }
+
 /* ── Buttons ── */
 .btn {
   display: inline-flex; align-items: center; gap: 6px;
